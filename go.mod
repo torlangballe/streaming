@@ -1,3 +1,3 @@
-module github.com/untangledco/streaming
+module github.com/torlangballe/streaming
 
 go 1.19
