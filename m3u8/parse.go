@@ -182,8 +182,12 @@ func parseVariant(items chan item) (*Variant, error) {
 					return nil, fmt.Errorf("parse closed-captions: unexpcted %s", it)
 				}
 				v.ClosedCaptions = strings.Trim(it.val, `"`)
+			case "VIDEO-RANGE":
+				continue
 			default:
-				return nil, fmt.Errorf("unknown attribute %s", attr.val)
+				fmt.Printf("** unknown attribute %s\n", attr.val)
+				continue // let's keep going, hard to know every attribute
+				// return nil, fmt.Errorf("unknown attribute %s", attr.val)
 			}
 		case itemComma:
 			continue
@@ -192,7 +196,7 @@ func parseVariant(items chan item) (*Variant, error) {
 			return &v, nil
 		}
 	}
-	fmt.Println(v)
+	fmt.Println("Parsed HLS Variant:", v)
 	return &v, nil
 }
 
