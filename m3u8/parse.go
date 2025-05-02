@@ -196,7 +196,7 @@ func parseVariant(items chan item) (*Variant, error) {
 			return &v, nil
 		}
 	}
-	fmt.Println("Parsed HLS Variant:", v)
+	// fmt.Println("Parsed HLS Variant:", v)
 	return &v, nil
 }
 
