@@ -1,9 +1,11 @@
 package m3u8
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -30,7 +32,21 @@ func Decode(rd io.Reader) (*Playlist, error) {
 		return nil, errors.New(it.val)
 	}
 	if it.typ != itemTag || it.val != tagHead {
-		return nil, fmt.Errorf("expected head tag, got %q", it.val)
+		var lines string
+		scanner := bufio.NewScanner(rd)
+		var count int
+		for scanner.Scan() {
+			lines += scanner.Text() + "\n"
+			count++
+			if count > 10 {
+				break
+			}
+		}
+		err := scanner.Err()
+		if err != nil {
+			log.Fatal(err)
+		}
+		return nil, fmt.Errorf("expected head tag, got %q, content: %s", it.val, lines)
 	}
 	p := &Playlist{}
 	var err error
