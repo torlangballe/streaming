@@ -286,7 +286,7 @@ func parseRendition(items chan item) (*Rendition, error) {
 				rend.Forced = b
 			}
 		case "INSTREAM-ID":
-			rend.InstreamID, err = parseCCInfo(it.val)
+			rend.InstreamID, err = parseCCInfo(strings.Trim(it.val, `"`))
 			if err != nil {
 				return nil, fmt.Errorf("parse instream-id: %w", err)
 			}
@@ -336,10 +336,13 @@ func parseCCInfo(s string) (*CCInfo, error) {
 	if len(s) < 3 {
 		return nil, fmt.Errorf("too short")
 	}
+	fmt.Println("***** Parsing CCInfo:", s, s[:2] == "CC", s[:2])
 	if s[:2] == "CC" {
 		// MUST have one of the values: "CC1", "CC2", "CC3", "CC4"
+		fmt.Println("***** Parsing CCInfo2:", s)
 		switch {
 		case len(s) == 3 && s[2] >= '1' && s[2] <= '4':
+			fmt.Println("***** Parsing CCInfo3:", s)
 			i := int(s[2] - '0')
 			return &CCInfo{i, false}, nil
 		default:
