@@ -220,7 +220,7 @@ func lexAttrs(l *lexer) stateFn {
 		case r == '@':
 			return lexAttrValue(l)
 		default:
-			return l.errorf("illegal character %q in attribute name", r)
+			return l.errorf("illegal character %q in attribute name. text:%s", r, l.input)
 		}
 	}
 }
