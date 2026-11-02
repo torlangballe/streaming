@@ -2,13 +2,21 @@ package m3u8
 
 import (
 	"bufio"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
+	"path"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/torlangballe/zutil/zhttp"
+	"github.com/torlangballe/zutil/zlog"
+	"github.com/torlangballe/zutil/zstr"
 )
 
 const (
@@ -22,7 +30,28 @@ const (
 	tagEndList             = "#EXT-X-ENDLIST"              // RFC 8216, 4.4.3.4
 	tagIndependentSegments = "#EXT-X-INDEPENDENT-SEGMENTS" // RFC 8216, 4.3.5.1
 	tagSessionData         = "#EXT-X-SESSION-DATA"         // RFC 8216, 4.3.4.4
+	tagEncryptionKey       = "#EXT-X-KEY"
+	tagProgramDateTime     = "#EXT-X-PROGRAM-DATE-TIME"
 )
+
+func DecodeFromURL(surl string) (*Playlist, time.Duration, error) {
+	params := zhttp.MakeParameters()
+	params.Method = http.MethodGet
+	now := time.Now()
+	resp, err := zhttp.GetResponse(surl, params)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get response from %s: %w", surl, err)
+	}
+	firstByteDur := time.Since(now)
+	// copy := zhttp.GetCopyOfResponseBodyAsString(resp)
+	playList, err := Decode(resp.Body)
+	playList.baseURL, _ = path.Split(surl)
+	if err != nil {
+		return nil, 0, err
+	}
+	zlog.Assert(playList != nil)
+	return playList, firstByteDur, nil
+}
 
 func Decode(rd io.Reader) (*Playlist, error) {
 	lex := newLexer(rd)
@@ -108,10 +137,93 @@ func Decode(rd io.Reader) (*Playlist, error) {
 					return p, fmt.Errorf("parse media sequence: %w", err)
 				}
 				p.Sequence = seq
+			case tagProgramDateTime:
+				it = <-lex.items
+				dt, err := time.Parse(time.RFC3339, it.val)
+				fmt.Println("ProgramDateTime:", dt, err)
+				if err != nil {
+					return p, fmt.Errorf("parse program date time: %w", err)
+				}
+			case tagEncryptionKey:
+				kid, err := parseFairplayEncryptionKID(lex.items)
+				if err != nil {
+					return p, fmt.Errorf("parse fairplay encryption KID: %w", err)
+				}
+				p.FairplayKID = kid
 			}
 		}
 	}
 	return p, nil
+}
+
+func getAssignments(items chan item) (map[string]string, error) {
+	a := make(map[string]string)
+	for it := range items {
+		if it.typ != itemAttrName {
+			return nil, fmt.Errorf("expected attribute name, got %s", it)
+		}
+		name := it.val
+		it = <-items
+		if it.typ != itemEquals {
+			return nil, fmt.Errorf("parse %s: expected =, got %s", name, it)
+		}
+		it = <-items
+		a[name] = it.val
+		it = <-items
+		switch it.typ {
+		case itemError:
+			return nil, fmt.Errorf("next attribute: %s", it.val)
+		case itemComma:
+			continue
+		case itemNewline:
+			// done
+			return a, nil
+		default:
+			return nil, fmt.Errorf("next attribute: expected comma or newline, got %s", it)
+		}
+	}
+	zlog.Error("getAssignments: unexpected end of items")
+	return a, nil
+}
+
+// #EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://eyJMaWNlbnNlU2VydmVyVXJsIjoiaHR0cHM6Ly90ZWxlbm9yLXByb2QucHJvZC5jb25heC5jbG91ZDo0NDMvZmFpcnBsYXkvbGljZW5zZSIsIktleUlkIjoiMjdlN2VmZDAtYzQyYy01OTZlLTkzOTYtMThlOWI1YTRiMDVhIiwiQ29udGVudFJlZiI6IjRBQTUxMkI4LUM0MUQtNjNDMi1FMDUzLTRGRjgyRjBBMUIyNyJ9",IV=0x00000000000000000000000000000000,KEYFORMAT="com.apple.streamingkeydelivery",KEYFORMATVERSIONS="1"
+func parseFairplayEncryptionKID(items chan item) (string, error) {
+	var b64 string
+	var uri struct {
+		KeyId            string
+		ContentRef       string
+		LicenseServerUrl string
+	}
+	var bytes []byte
+	kvs, err := getAssignments(items)
+	if kvs["METHOD"] != "SAMPLE-AES" {
+		return "", nil
+	}
+	zlog.Info("Got key assignments:", zlog.Full(kvs))
+	kf := strings.Trim(kvs["KEYFORMAT"], `"`)
+	if kf != "com.apple.streamingkeydelivery" {
+		return "", nil
+	}
+	uriVal := strings.Trim(kvs["URI"], `"`)
+	if strings.HasPrefix(uriVal, "data:") { // this data URL is not for normal fairplay nagra, but here in case other case
+		bytes, err = zhttp.DataURLToBytes(uriVal)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode data URL %q: %w", uriVal, err)
+		}
+	} else if zstr.HasPrefix(uriVal, "skd://", &b64) {
+		bytes, err = base64.StdEncoding.DecodeString(b64)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode base64 URI %q: %w", string(bytes), err)
+		}
+	} else {
+		return "", fmt.Errorf("unsupported URI scheme %q", uriVal)
+	}
+	err = json.Unmarshal(bytes, &uri)
+	if err != nil {
+		return "", fmt.Errorf("failed to unmarshal key json %q: %w", string(bytes), err)
+	}
+	zlog.Info("Got key json:", zlog.Full(uri))
+	return uri.KeyId, nil
 }
 
 func parseVariant(items chan item) (*Variant, error) {
