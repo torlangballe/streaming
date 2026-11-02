@@ -219,6 +219,9 @@ func lexAttrs(l *lexer) stateFn {
 			return lexAttrValue(l)
 		case r == '@':
 			return lexAttrValue(l)
+		case r == ':':
+			// Maybe a date-time, e.g. 2024-01-01T12:00:00.000Z
+			return lexRawString(l)
 		default:
 			return l.errorf("illegal character %q in attribute name. text:%s", r, l.input)
 		}
