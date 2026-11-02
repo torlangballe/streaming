@@ -17,11 +17,12 @@ const MimeType string = "application/vnd.apple.mpegurl"
 const RFC3339Milli string = "2006-01-02T15:04:05.999Z07:00"
 
 type Playlist struct {
+	baseURL string
+
 	Version             int
 	Segments            []Segment
 	IndependentSegments bool
 	Start               *StartPoint
-
 	// Media playlist
 	// RFC 8216, 4.4.3.1
 	TargetDuration        time.Duration
@@ -36,6 +37,7 @@ type Playlist struct {
 	Variants    []Variant
 	SessionData []SessionData
 	SessionKey  *Key
+	FairplayKID string
 }
 
 type Segment struct {
@@ -176,4 +178,8 @@ func (t PlaylistType) String() string {
 type StartPoint struct {
 	Offset  float32
 	Precise bool
+}
+
+func (pl *Playlist) FullURL(suffix string) string {
+	return pl.baseURL + suffix
 }
