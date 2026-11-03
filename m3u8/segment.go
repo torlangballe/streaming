@@ -48,6 +48,9 @@ func parseSegment(items chan item, leading item) (*Segment, error) {
 		case itemURL:
 			seg.URI = it.val
 			return &seg, nil
+		case itemComma:
+			// EXTINF may end with the separator and omit its optional title.
+			continue
 		case itemTag:
 			switch it.val {
 			case tagSegmentDuration:

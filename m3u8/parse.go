@@ -139,8 +139,7 @@ func Decode(rd io.Reader) (*Playlist, error) {
 				p.Sequence = seq
 			case tagProgramDateTime:
 				it = <-lex.items
-				dt, err := time.Parse(time.RFC3339, it.val)
-				fmt.Println("ProgramDateTime:", dt, err)
+				_, err := time.Parse(time.RFC3339, it.val)
 				if err != nil {
 					return p, fmt.Errorf("parse program date time: %w", err)
 				}
@@ -149,7 +148,9 @@ func Decode(rd io.Reader) (*Playlist, error) {
 				if err != nil {
 					return p, fmt.Errorf("parse fairplay encryption KID: %w", err)
 				}
-				p.FairplayKID = kid
+				if kid != "" {
+					zstr.AddToSet(&p.FairplayKIDs, kid)
+				}
 			}
 		}
 	}
@@ -186,7 +187,6 @@ func getAssignments(items chan item) (map[string]string, error) {
 	return a, nil
 }
 
-// #EXT-X-KEY:METHOD=SAMPLE-AES,URI="skd://eyJMaWNlbnNlU2VydmVyVXJsIjoiaHR0cHM6Ly90ZWxlbm9yLXByb2QucHJvZC5jb25heC5jbG91ZDo0NDMvZmFpcnBsYXkvbGljZW5zZSIsIktleUlkIjoiMjdlN2VmZDAtYzQyYy01OTZlLTkzOTYtMThlOWI1YTRiMDVhIiwiQ29udGVudFJlZiI6IjRBQTUxMkI4LUM0MUQtNjNDMi1FMDUzLTRGRjgyRjBBMUIyNyJ9",IV=0x00000000000000000000000000000000,KEYFORMAT="com.apple.streamingkeydelivery",KEYFORMATVERSIONS="1"
 func parseFairplayEncryptionKID(items chan item) (string, error) {
 	var b64 string
 	var uri struct {
@@ -199,7 +199,7 @@ func parseFairplayEncryptionKID(items chan item) (string, error) {
 	if kvs["METHOD"] != "SAMPLE-AES" {
 		return "", nil
 	}
-	zlog.Info("Got key assignments:", zlog.Full(kvs))
+	// zlog.Info("Got key assignments:", zlog.Full(kvs))
 	kf := strings.Trim(kvs["KEYFORMAT"], `"`)
 	if kf != "com.apple.streamingkeydelivery" {
 		return "", nil
@@ -219,10 +219,10 @@ func parseFairplayEncryptionKID(items chan item) (string, error) {
 		return "", fmt.Errorf("unsupported URI scheme %q", uriVal)
 	}
 	err = json.Unmarshal(bytes, &uri)
+	// zlog.Info("Got key json:", zlog.Full(uri), err)
 	if err != nil {
 		return "", fmt.Errorf("failed to unmarshal key json %q: %w", string(bytes), err)
 	}
-	zlog.Info("Got key json:", zlog.Full(uri))
 	return uri.KeyId, nil
 }
 

@@ -37,7 +37,7 @@ type Playlist struct {
 	Variants    []Variant
 	SessionData []SessionData
 	SessionKey  *Key
-	FairplayKID string
+	FairplayKIDs []string
 }
 
 type Segment struct {

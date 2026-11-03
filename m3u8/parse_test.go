@@ -91,6 +91,25 @@ func TestParseDuration(t *testing.T) {
 	}
 }
 
+func TestDecodeEXTINFWithTitleAndQueriedURI(t *testing.T) {
+	const uri = "index_3_19331943.ts?m=1678993520&bpkio_serviceid=service&bpkio_sessionid=session"
+	input := "#EXTM3U\n#EXTINF:6, no desc\n" + uri + "\n"
+
+	playlist, err := Decode(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(playlist.Segments) != 1 {
+		t.Fatalf("got %d segments, want 1", len(playlist.Segments))
+	}
+	if got := playlist.Segments[0].Duration; got != 6*time.Second {
+		t.Errorf("segment duration = %s, want %s", got, 6*time.Second)
+	}
+	if got := playlist.Segments[0].URI; got != uri {
+		t.Errorf("segment URI = %q, want %q", got, uri)
+	}
+}
+
 func TestParseByteRange(t *testing.T) {
 	var tests = []struct {
 		in    string

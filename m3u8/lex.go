@@ -171,13 +171,37 @@ func lexTagName(l *lexer) stateFn {
 			l.emit(itemNewline)
 			return lexStart(l)
 		case ':':
+			tag := l.input[l.start:l.pos]
 			l.emit(itemTag)
 			l.next()
 			l.ignore()
+			if tag == tagSegmentDuration {
+				return lexExtInf(l)
+			}
 			return lexAttrs(l)
 		}
 		return l.errorf("illegal tag character %q", r)
 	}
+}
+
+func lexExtInf(l *lexer) stateFn {
+	for l.peek() != ',' && l.peek() != '\n' {
+		l.next()
+	}
+	l.emit(itemNumber)
+	if l.peek() == ',' {
+		l.next()
+		l.emit(itemComma)
+		for l.peek() != '\n' {
+			l.next()
+		}
+		if l.start < l.pos {
+			l.emit(itemString)
+		}
+	}
+	l.next()
+	l.emit(itemNewline)
+	return lexStart(l)
 }
 
 func isTagNameChar(r rune) bool {
@@ -222,6 +246,10 @@ func lexAttrs(l *lexer) stateFn {
 		case r == ':':
 			// Maybe a date-time, e.g. 2024-01-01T12:00:00.000Z
 			return lexRawString(l)
+		case r == '\t':
+			l.next()
+			l.ignore()
+			continue
 		default:
 			return l.errorf("illegal character %q in attribute name. text:%s", r, l.input)
 		}
@@ -233,6 +261,8 @@ func lexAttrValue(l *lexer) stateFn {
 	switch r {
 	case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.':
 		return lexNumber(l)
+	case '@':
+		return lexRawString(l)
 	case '"':
 		return lexQString(l)
 	}
