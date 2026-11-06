@@ -34,7 +34,7 @@ const (
 	tagProgramDateTime     = "#EXT-X-PROGRAM-DATE-TIME"
 )
 
-func DecodeFromURL(surl string) (*Playlist, time.Duration, error) {
+func DecodeFromURL(surl string, isSampleAESKidIDInJsonInSKD bool) (*Playlist, time.Duration, error) {
 	params := zhttp.MakeParameters()
 	params.Method = http.MethodGet
 	now := time.Now()
@@ -44,7 +44,7 @@ func DecodeFromURL(surl string) (*Playlist, time.Duration, error) {
 	}
 	firstByteDur := time.Since(now)
 	// copy := zhttp.GetCopyOfResponseBodyAsString(resp)
-	playList, err := Decode(resp.Body)
+	playList, err := Decode(resp.Body, isSampleAESKidIDInJsonInSKD)
 	playList.baseURL, _ = path.Split(surl)
 	if err != nil {
 		return nil, 0, err
@@ -53,7 +53,7 @@ func DecodeFromURL(surl string) (*Playlist, time.Duration, error) {
 	return playList, firstByteDur, nil
 }
 
-func Decode(rd io.Reader) (*Playlist, error) {
+func Decode(rd io.Reader, isSampleAESKidIDInJsonInSKD bool) (*Playlist, error) {
 	lex := newLexer(rd)
 	go lex.run()
 	it := <-lex.items
@@ -144,12 +144,14 @@ func Decode(rd io.Reader) (*Playlist, error) {
 					return p, fmt.Errorf("parse program date time: %w", err)
 				}
 			case tagEncryptionKey:
-				kid, err := parseFairplayEncryptionKID(lex.items)
-				if err != nil {
-					return p, fmt.Errorf("parse fairplay encryption KID: %w", err)
-				}
-				if kid != "" {
-					zstr.AddToSet(&p.FairplayKIDs, kid)
+				if isSampleAESKidIDInJsonInSKD {
+					kid, err := parseFairplayEncryptionKID(lex.items)
+					if err != nil {
+						return p, fmt.Errorf("parse fairplay encryption KID: %w", err)
+					}
+					if kid != "" {
+						zstr.AddToSet(&p.FairplayKIDs, kid)
+					}
 				}
 			}
 		}
